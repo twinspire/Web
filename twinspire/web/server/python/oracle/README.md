@@ -1,0 +1,1 @@
+To generate Oracle DB externs in this folder for the Python target.

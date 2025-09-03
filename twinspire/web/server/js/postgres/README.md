@@ -1,0 +1,1 @@
+To generate PostgreSQL externs in this folder for the JS target.

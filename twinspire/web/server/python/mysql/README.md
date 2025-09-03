@@ -1,0 +1,1 @@
+To generate MySql externs in this folder for the Python target.

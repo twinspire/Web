@@ -1,0 +1,1 @@
+To generate Microsoft SQL Server externs in this folder for the JS target.

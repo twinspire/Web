@@ -1,0 +1,1 @@
+To generate SQlite externs in this folder for the Python target.
