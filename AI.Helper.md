@@ -13,8 +13,8 @@ I hope this is not too much to ask and won't cause issues.
 
 Let me explain how this project will be broken down.
 
- * In the `twinspire.web` package contains mostly API and architectural design decisions specific to Haxe or my design goals. Invariably, much of this is incomplete.
- * Inside most folders contains a `README.md` file which is an instruction for the entire folder. Please read this carefully when there is mention, for example, of `twinspire.web.server.js` package, or an abbreviation of sorts.
+ * In the `twinspire.web` package contains mostly API and architectural design decisions specific to Haxe or my design goals. Inevitably, much of this is incomplete.
+ * Inside most folders contains a `README.md` file which is an instruction for the entire folder. Please read this carefully when there is mention, for example, of `twinspire.web.server.js` package.
  * You will likely find functions empty or missing implementations. Unless otherwise stated, I would be asking you to help me implement those empty functions.
  * For the remainder of this document, read it as though it is already the written documentation for this project that a user would typically read to understand how to use it. Pretend as though the API is complete, so as to produce the implementations as you read these "guides". This, I hope, will give you a firm idea of what to assist with.
 
@@ -22,6 +22,7 @@ Finally, before I begin with the "documentation", there is one other thing I sho
 
  * For any large undertaking, with the exception of generating `extern` code to link with target language libraries, let's discuss the implementation details prior to completing them. This way, we can ensure we are both on the same wavelength and the source code generated is adequate and complete.
  * Note the section on "Briefly on WebCore" - this repository does not exist yet and no implementation for it exists. However, you can pretend that it does exist if it helps to bring clarity to some of the goals of this project.
+ * And finally, you can use other libraries in target languages if it aims to resolve a specific goal, as long as it is not itself a framework. If doing so, please inform me of this decision, specify the library, and generate the externs for using the target library.
 
 # Twinspire Web Docs
 
@@ -108,4 +109,154 @@ templates/ # This is the folder containing `thmx` files (Twinspire Templates)
 build.config.json # The Twinspire CLI build configuration file that specifies how this project should build.
 build.app.json # Additional CLI configuration if building together with WebCore.
 ```
+
+### `build.config.json`
+This is the configuration file used by the haxelib run script in `twinspire-web`, whwn using the command `build`. The build command requires that this file is present in the directory this command is run.
+
+Here is an example of the file:
+
+```json
+{
+ "type": "app",
+ "database": {
+  "vendor": "mysql",
+  "multithreaded": false
+ },
+ "content": "static",
+ "build": {
+  "path": "build/js",
+  "source": "source/",
+  "templates": "templates/",
+  "target": "js",
+  "defines": [
+   "DB_MYSQL",
+   "WebCore"
+  ],
+  "modules": {
+   "node": {
+    "commands": {
+     "launch": "node js/index.js",
+     "live": "nodemon js/index.js"
+    },
+    "node_modules": [
+     "koa",
+     "koa-router"
+    ]
+   },
+   "js": {
+    "build": {
+     "path": "static/scripts/main.js",
+     "libraries": [
+      "twinspire-web"
+     ]
+    }
+   }
+  },
+  "commands": [
+   {
+    "name": "debug",
+    "sequence": [
+     "haxe build.hxml",
+     "@js:build",
+     "npm -install",
+     "pushd build",
+     @node:launch",
+     "popd"
+    ]
+   }
+  ]
+ }
+}
+```
+
+#### `type`
+Can be either `app`, `api` or `module`.
+
+`app` defines a typical website with both front-end and back-end built-in.
+`api` defines an authentication-only backend and the interface is typically presented as a data interchange format (REST, Qaml, etc.)
+`module` makes the project a usable library. The configuration file is interpreted by the Twinspire `build` command down the chain. Using this project like a library uses the same library usage policies as the Haxelib process. Simply make this project a `haxelib dev` environment for re-use and add the name to the `libraries` array in the root `build` object of the config.
+
+#### `database`
+An object with the following data.
+
+ * `vendor` A valid database vendor.
+ * `multithreaded` Whether to use a multithreaded database. Code generation adjusts accordingly.
+
+#### `content`
+This is a path to a directory holding static content. When content is served from the server, this path is trimmed from the result.
+
+#### `build`
+The build object represents a multitude of options that can seem daunting at first, but it assists in generating the relevant compiler commands passed to haxe for compiling.
+
+This `build` object is also applicable inside its child `modules` object, minus the `modules` and `commands` fields.
+
+##### `path`
+This is where the output should generate into. Always use a directory, even on the JavaScript target, as Twinspire will generate the entry point file if one is not otherwise provided.
+
+##### `source`
+The path to the source files.
+
+##### `templates`
+The path to the template/HTML files.
+
+##### `entry`
+This is the name of the file generated for the JavaScript target. Default: `index.js`
+
+##### `defines`
+A collection of string values as defines. These are passed to the haxe compiler as `-D [define]` where [define] is the supplied define.
+
+Internal Twinspire Defines:
+
+```
+DB_MYSQL
+DB_SQLITE
+DB_ORACLE
+DB_POSTGRES
+DB_MS
+WebCore
+ExtraAuth
+WEB_CLIENT_DEBUG
+```
+
+##### `libraries`
+A collection of libraries passed into the Haxe compiler. This list must be Haxe libraries, not target language libraries.
+
+##### `modules`
+This is an object where the keys are the target environment or language. When targeting JS for the server, `node` is used.
+
+Each target language has specific fields.
+
+Under `node`:
+
+ * `commands` is a map defining names of commands followed by the command line string to execute.
+ * `node_modules` is a collection of node modules that is required. Twinspire will install these modules in the output directory defined in `path` on the root.
+
+Under `js`:
+
+ * `build` uses the same object structure as the root `build` object, minus items not relevant.
+
+Under `php`:
+
+ * `htaccess`, used in Apache configurations, is an object defining keys as paths to directories, and a string defining the htaccess file to copy, relative to the root of this project.
+ * `proxy` is an object that lets you configure a NGINX proxy server. Refer to the NGINX documentation for a reference.
+ * `configure` is an object that generates NGINX or Apache local configuration for local hosting.
+
+Under `python`:
+
+ * Uses the same configuration options as `php`.
+
+#### `commands`
+Commands is an array of objects defining the logical sequence of command line prompts to enter.
+
+Properties:
+
+ * `name` - The name of the command.
+ * `sequence` - An array of strings interpreted as commands. Some commands may include a prefix `@`, which refers to the module name, followed by a `:` and the name of the sub-command within that module, typically under a `commands` object. This is different for the client-side target `js`, where the sub-command refers to a Haxe compilation build-step generated from the sub-command contents.
+
+To understand how `@` makes more sense, consider the exanples above.
+
+`@node:launch` translates to `node js/index.js`
+`@js:build`, on the other hand, because it converts to a Haxe compilation step, reads the underlying object to generate a Haxe command. In this case:
+
+`haxe -cp source/ -lib twinspire-web -js static/scripts/main.js`
 
