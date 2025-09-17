@@ -260,3 +260,249 @@ To understand how `@` makes more sense, consider the exanples above.
 
 `haxe -cp source/ -lib twinspire-web -js static/scripts/main.js`
 
+## Templates
+As this is considered a HTML-first framework, one part of this is Templates. They are valid HTML files with added syntactic sugar defining injection or source code to execute.
+
+String injection looks like this: `<# my_variable #>`
+
+Code to execute looks like this: `<#hx var my_variable = "Hello, world!" #>`
+
+The difference is the denoter, `hx`, defining that the wrapping code is Haxe code.
+
+When Twinspire compiles templates, it will typically convert anything wrapped within these tags to their usage equivalent, in a Haxe file of the same name as the Template file inside your source path, followed by the directory pattern of the `templates` directory in which the source HTML file was found.
+
+Converting performs multiple processes:
+
+  * Haxe class is generated following the same name and package as the file name and directory path of the template, respectively.
+  * Find a `<#hx:init ... #>` tag, defining the constructor.
+  * Find a `<#hx:root ... #>` tag to generate variables.
+  * Any non-marked method tags are generated as load/render functions.
+
+Let's take the following HTML as an example:
+
+```html
+<#hx:root
+ var isApp:Bool;
+#>
+
+<#hx:init
+ isApp = false;
+#>
+
+<html>
+ <head>
+  <title><# document_title #></title>
+  <#hx if (isApp) { #>
+  <meta name="description" content="Use this app.">
+  <#hx } else { #>
+  <meta name="description" content="This is the landing page.">
+  <#hx } #>
+ </head>
+</html>
+```
+
+The above example converts to the following Haxe file:
+
+```haxe
+package templates;
+
+import twinspire.web.Template;
+
+import js.lib.HtmlElement;
+impory js.Browser;
+
+class _Unnamed1 extends Template {
+
+ private var document_title_el:HtmlElement;
+
+ public var document_title(get, set):String;
+ function get_document_title() {
+  return document_title_el.innerHtml;
+ }
+ function set_document_title(val) {
+  return document_title_el.innerHtml = val;
+ }
+
+ var isApp:Bool;
+ 
+ public function new() {
+  isApp = false;
+  
+  // extracted variables
+  document_title_el = Browser.document.querySelector("html head title");
+ }
+ 
+ public override function render() {
+  var result = "";
+  result += '<html>
+ <head>
+  <title>';
+  result += document_title;
+  result += '</title>';
+  if (isApp) {
+   result += '<meta name="description" content="Use this app.">';
+  }
+  else {
+   result += '<meta name="description" content="This is the landing page.">';
+  }
+  
+  result += '</head>
+</html>';
+  return result;
+ }
+ 
+}
+```
+
+The way this is generated is done through the CLI command `haxelib run twinspire-web build`. It reads and parses HTML documents and does the following:
+
+ * Reads between any `<#` and `#>`, trimming the content and both sides of the tag, leaving the content for input later.
+ * Any Html content left of the beginning tag is trimmed and stored into cache.
+ * Any Html content on the right of the tag is also trimmed and stored into cache if it happens to be the last special tag.
+ * Tags with specific conditions are interpreted depending on context. `init` refers to the body of the `new` constructor function of the generated class. `root` refers to the body of the class itself. Can be any valid Haxe code, but cannot create a `function new()`.
+ * Inside each tag, the code generated is based on how the tag is used. Typically, anything omitting `hx` is considered a variable to inject. With `hx` excluding scope specifiers are interpreted as raw Haxe code to be injected as is.
+
+These files are generated into the source code directory following the template directory pattern. Almost all Haxe code is valid besides `import` and `package`.
+
+To use types defined in Haxe source files, you can use a different method:
+
+```
+<@ include(MyType) @>
+```
+
+This will automatically generate an import for the specified type for the current document.
+
+Since Twinspire Templates allows Haxe code, any Haxe code is viable. Twinspire will track parsed Html lines and report compilation issues at the Html-level rather than Haxe level.
+
+Since any Haxe code is valid, you can typically import Twinspire Web API into the current Html document.
+
+Since there are many classes and functions, you can import entire modules using an asterisk.
+
+```
+<@ include(twinspire.web.*) @>
+<@ include(twinspire.web.db.*) @>
+```
+
+Refer to the specific API documentation on how to use the related functions and classes.
+
+### Pages
+Templates can take the form of multiple pages. To inject pages and ensure they are setup router-wise, `index.thmx` should have body content for the following:
+
+```
+<@ inject("content-wrapper") @>
+```
+
+This defines an injection point in which the routed page is injected, keeping the remaining HTML code intact.
+
+Inside a page, like `about.thmx` in the `pages` folder, define the injection target at the top of the document.
+
+```
+<@ inject-target("content-wrapper") @>
+```
+
+Assuming there is a root `index.thmx` file and the template is successfully routed, the evaluated HTML is injected in the correct place.
+
+Inside `index.thmx`, an additional code point is generated in Haxe source.
+
+```hx
+class Index extends Template {
+ 
+ public var content_wrapper:Template;
+ 
+ public function new() {
+  super();
+ }
+ 
+}
+```
+
+This additional code generated serves as the entry point for routed pages, assuming they exist, and the `render` function is adjusted to suit.
+
+```hx
+public override function render() {
+ var result = "";
+ if (content_wrapper != null) {
+  result += content_wrapper.render();
+ }
+ return result;
+}
+```
+
+If multiple entry points exist, use the target type (not the file name):
+
+```
+<@ inject-into("content-wrapper", Index) @>
+```
+
+`Index` is the default type.
+
+When using parameters in routes, it is typical to use them to dynamically load content from a database, like so:
+
+```html
+<@ param("blog_title") as blog_title @>
+
+<#hx
+  var results = Database.where<BlogPost>($title.like(blog_title));
+#>
+
+<div id="blog">
+ <#hx for (post in results) { #>
+  <!-- content here -->
+ <#hx } #>
+</div>
+```
+
+### Components
+Unlike other Templates, Components are considered render-only with minimal code allowed.
+
+Components do not allow the following code:
+
+ * `params` inside `@` tags.
+ * `inject` and `inject-into`.
+ * `include` replaced by `use`.
+
+The `use` keyword, replacing `include`, is considered a function parameter. The variable is implied unless more than one parameter is used.
+
+```
+<@ use(BlogPost) @>
+```
+
+This specifies that a `BlogPost` instance should be used to render the template, and normal `<#` tags can be used for simple injections.
+
+Field names from the instance type can be used without an explicit instance variable.
+
+You can use multiple instances, but explicit variable parameters are required.
+
+```
+<@ use(blog : BlogPost, authenticated : Bool) @>
+```
+
+In this instance, you can inject in Html like so:
+
+```html
+<# blog.title #>
+<#hx if (authenticated) { #>
+<button>Delete</button>
+<#hx } #>
+```
+
+Component files belong in the `components` folder of `templates`.
+
+When Components are generated into Haxe code, they are generated as `static function` in a class called `Components`. This makes them easily accessible.
+
+To use a Component in a Page:
+
+```html
+<@ param("blog_title") as blog_title @>
+
+<#hx
+  var results = Database.where<BlogPost>($title.like(blog_title));
+#>
+
+<div id="blog">
+ <#hx for (post in results) {
+  Components.post(post, true);
+ } #>
+</div>
+```
+
