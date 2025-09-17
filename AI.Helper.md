@@ -124,6 +124,7 @@ Here is an example of the file:
  },
  "content": "static",
  "build": {
+  "method": "html",
   "path": "build/js",
   "source": "source/",
   "templates": "templates/",
@@ -189,6 +190,11 @@ This is a path to a directory holding static content. When content is served fro
 The build object represents a multitude of options that can seem daunting at first, but it assists in generating the relevant compiler commands passed to haxe for compiling.
 
 This `build` object is also applicable inside its child `modules` object, minus the `modules` and `commands` fields.
+
+##### `method`
+The method value determines how the project is built. For a HTML-first approach, use `html` as the value, otherwise `api`.
+
+Using `html` will overwrite and regenerate Haxe files in the source directory. Be careful of this.
 
 ##### `path`
 This is where the output should generate into. Always use a directory, even on the JavaScript target, as Twinspire will generate the entry point file if one is not otherwise provided.
@@ -505,4 +511,55 @@ To use a Component in a Page:
  } #>
 </div>
 ```
+
+## API
+
+### API-First Approach
+When using the API first approach, you will notice that generated `Routes.hx`, `Auth.hx` and `Errors.hx` classes are each more minimal than the HTML-First approach.
+
+If you build using this approach, ensure the `build.method` value is `api` in your config file.
+
+In order to use the API approach, you will need to understand routing, authentication, authorisation, databases, middleware and more with Twinspire Web - typically more options than what you may be used to if coming from the HTML-First approach.
+
+### Routing
+The router uses the `twinspire.web.Router` static class.
+
+The static functions are designed to be simple and easy to understand.
+
+```haxe
+function get(request:IRequest, response:IResponse):IRouter {
+ 
+}
+```
+
+The `get` function gets a resource from the user. It can be used for both retrieving static content and serving dynamic content.
+
+For this, we need to access the params of `IRequest` to determine the type of request.
+
+#### `getParams()`
+The `getParams()` gets a `Map<String, Dynamic>` representing the parameters of a URL, normally the format `key=value`.
+
+#### `getHeaders()`
+The `getHeaders()` functipn returns `Header`, representing the data of the header sent with the request.
+
+#### `isFileRequest()`
+This is a convenience function that determines if the request is a raw request to a file. In order to get correct results with this function, the `content` path of the config file must be filled in, and file extensions are properly configured.
+
+To set file extensions, you can use `Server.useServerStaticDefaults();`, which sets up all default files for you, otherwise you can modify this using the following:
+
+```
+Server.serveContent(Project.config.content, {
+ allow: [ "png", "css", "js" ],
+ deny: [ "exe", "zip" ]
+});
+```
+
+#### `hasBody()`
+Typically not set in a `GET` request, but returns `true` in any case if content exists in the body.
+
+#### `getBodyContentType()`
+Gets the `Content-Type` value of the `body`, if one exists.
+
+#### `getBody()`
+Retrieves the body content as a String. Can be parsed when you know the format.
 
