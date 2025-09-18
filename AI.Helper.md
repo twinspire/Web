@@ -527,7 +527,7 @@ The router uses the `twinspire.web.Router` static class.
 The static functions are designed to be simple and easy to understand.
 
 ```haxe
-function get(path:String, callback:(IRequest, IResponse) -> Void):IRouter {
+function get(path:String, callback:(IRequest, IResponse) -> IRouter):IRouter {
  
 }
 ```
@@ -592,10 +592,10 @@ Prepare any headers prior to sending a response.
 Other functions of the router include:
 
 ```
-post(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
-put(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
-patch(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
-delete(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
+post(path:String, callback:(IRequest, IResponse) -> IRouter):IRouter;
+put(path:String, callback:(IRequest, IResponse) -> IRouter):IRouter;
+patch(path:String, callback:(IRequest, IResponse) -> IRouter):IRouter;
+delete(path:String, callback:(IRequest, IResponse) -> IRouter):IRouter;
 ```
 
 ### `IRouter`
@@ -625,4 +625,59 @@ router.use(router.get("news/", (request, response) -> {
  }));
 });
 ```
+
+## Database
+There are two ways to store data in Twinspire Web.
+
+The first is through file stores, the second via an SQL database.
+
+### File Stores
+To define a file store, do so using the Storage class.
+
+```haxe
+var data = new Storage("shared/data.txt", FileType.Text);
+```
+
+There are three different types:
+
+ * `Text`
+ * `Binary`
+ * `Stream`
+
+The first two speak for themselves. In `Stream` mode, use `begin` and `end` functions to stream data. This is best used when you want partial data to be available to a client, rather than full data (download).
+
+A list of `Storage` functions exist below.
+
+#### `begin()`
+Starts a stream. Use the default values, or begin streaming from a given `pos`.
+
+#### `end()`
+Ends streaming data.
+
+Ensure this is called before responding to a request.
+
+Usage:
+
+```haxe
+var videoStream = router.get("v/:id", (request, response) -> {
+ var videoDataStore = new Storage(request.path, FileType.Stream);
+ videoDataStore.begin(request.getBody()["video_pos"]);
+ var data = videoDataStore.tryGetData(1024);
+ videoDataStore.end();
+ return response.send(data);
+});
+```
+
+#### `tryGetData()`
+Attempts to obtain data in the number of given bytes.
+
+If data is retrieved from the file, the result is a `haxe.io.Bytes`, otherwise `null`;
+
+Result is always `null` if the file type is not `Stream`.
+
+#### `getString()`
+Get a `String` representation of the underlying data.
+
+#### `getData()`
+Get the `haxe.io.Bytes` of the underlying data.
 
