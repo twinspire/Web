@@ -521,13 +521,13 @@ If you build using this approach, ensure the `build.method` value is `api` in yo
 
 In order to use the API approach, you will need to understand routing, authentication, authorisation, databases, middleware and more with Twinspire Web - typically more options than what you may be used to if coming from the HTML-First approach.
 
-### Routing
+## Routing
 The router uses the `twinspire.web.Router` static class.
 
 The static functions are designed to be simple and easy to understand.
 
 ```haxe
-function get(request:IRequest, response:IResponse):IRouter {
+function get(path:String, callback:(IRequest, IResponse) -> Void):IRouter {
  
 }
 ```
@@ -562,4 +562,67 @@ Gets the `Content-Type` value of the `body`, if one exists.
 
 #### `getBody()`
 Retrieves the body content as a String. Can be parsed when you know the format.
+
+### Responding
+When responding to a route, you typically call `return response.send(new Template(request.getParams()));`. This is what Twinspire generates in the HTML first approach.
+
+`IResponse` has more mechanisms, of course, which can help define more control over what is sent to the user.
+
+#### `send()`
+Can either send a `Template` instance, or an instance deriving from it, or a `String` value.
+
+In both cases, the return status is always HTTP `200` (OK).
+
+When this value is `return`ed in the current context, this ends the chain and completes a result.
+
+#### `message()`
+Send a message as a `Dynamic` value, a given `ContentType` and HTTP `status` code.
+
+This must `return` in the current context to end the chain, regardless of `status` code.
+
+Missing the `return` may lead to unexpected results.
+
+#### `parse()`
+Parse a String as a Twinspire Template string. This only allows injecting variables, no intermediate Haxe code.
+
+#### `headers`
+Prepare any headers prior to sending a response.
+
+### `Router Functions`
+Other functions of the router include:
+
+```
+post(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
+put(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
+patch(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
+delete(path:String, callback:(IRequest, IResponse) -> Void):IRouter;
+```
+
+### `IRouter`
+Inside the `IRouter` interface, typically implemented by an extern reference for an underlying target language class, exists all the above functions, plus the additional functions:
+
+#### `group()`
+Group a series routes to a parent path.
+
+For example:
+
+```haxe
+var apiV1 = router.group("api").group("v1");
+apiV1.get("customers/:id", (request, response) -> {
+ // do something
+});
+```
+
+#### `use()`
+Allows using a route as the basis for determining execution chaining.
+
+In other words, if you wanted to execute part of a path before the next part, you would do so like this:
+
+```haxe
+router.use(router.get("news/", (request, response) -> {
+ return router.use(request, response, router.get("edit/", (requestEdit, responseEdit) -> {
+  return responseEdit.message("Edit successful", Http.OK);
+ }));
+});
+```
 
