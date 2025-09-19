@@ -715,3 +715,67 @@ In both cases, you find that there is the possibility to have more than one data
  * `database` - The specific database to connect to. Leave blank to allow mutiple database access.
  * `auth` - Specify either `sql` or `os`. In `os` authentication mode, username and password is ommitted. Only vendors supporting `os` authentication is valid, otherwise a runtime error is produced.
 
+#### SQL Connector
+On initialisation, you will be required to setup a connector. This is best done in the main entry point.
+
+```haxe
+package;
+
+import twinspire.web.Web;
+impory twinspire.web.Database;
+
+public static function main() {
+ var connection = Database.connect(Web.environment.databases["local"]);
+}
+```
+
+To test the connection, use:
+
+```haxe
+connection.open();
+connection.close();
+```
+
+To ping a live connection, simply call:
+
+```haxe
+connection.ping();
+```
+
+This returns `true` if the connection is still live.
+
+There are three main ways to use database connections:
+
+ * Raw SQL with `connection.execute` and `connection.query`.
+ * Parameterised SQL with the SQL Builder class `Sql` (`twinspire.web.db.Sql`), using `connection.build(sql);`.
+ * Or, Object Model Relationships with `IDBObject` and pre-generated macro sql queries using `connection.compile()`
+
+In almost all cases, you can build a series of SQL commands and execute them at once:
+
+```haxe
+connection.beginQuery();
+// ... sql generation code
+connection.executeQuery();
+```
+
+In addition, you can execute transactions in most vendors:
+
+```haxe
+connection.beginTransaction("TRANSACTION_NAME");
+connection.addParam(false);
+
+connection.onTransaction((part) -> {
+ // do something on each transaction part
+});
+```
+
+In the HTML-First approach, connections are not exposed and you must use either the ORM directly with database objects, or access SQL Builder using the following:
+
+```haxe
+Sql.trigger(this);
+```
+
+Where `trigger`'s first parameter is a `Template` class instance.
+
+Raw SQL strings are not exposed in the HTML Templates for security reasons, and it is always recommended to use full Sql building over any raw queries while using Templates.
+
