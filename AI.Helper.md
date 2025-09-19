@@ -681,3 +681,37 @@ Get a `String` representation of the underlying data.
 #### `getData()`
 Get the `haxe.io.Bytes` of the underlying data.
 
+### SQL Databases
+SQL databases are configured based both on configuration options in the Twinspire project config and on the `env.json` file found in the root of your build output directory.
+
+You specify the vendor in project config, and then specify your host, database and login settings in `env.json`.
+
+#### Setup `env.json`
+In `env.json`, you need the following structure:
+
+```json
+{
+ "databases": {
+  "local": {
+   "username": "root",
+   "password": "",
+   "host": "127.0.0.1",
+   "database": "test_db",
+   "port": 3306,
+   "auth": "sql"
+  }
+ }
+}
+```
+
+You can also have an `env.dev.json` which can serve as the development environment if it exists. This is used in favour of `env.json` when you use debug flags in the build. The dev file is detected automatically.
+
+In both cases, you find that there is the possibility to have more than one database configuration. See each property below for details.
+
+ * `username` - specify the login username when using `auth` sql.
+ * `password` - specify the password for the username.
+ * `host` - IP address or server name of the database host.
+ * `port` - Specify a port if different from the default for the vendor.
+ * `database` - The specific database to connect to. Leave blank to allow mutiple database access.
+ * `auth` - Specify either `sql` or `os`. In `os` authentication mode, username and password is ommitted. Only vendors supporting `os` authentication is valid, otherwise a runtime error is produced.
+
