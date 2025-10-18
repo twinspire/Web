@@ -779,3 +779,180 @@ Where `trigger`'s first parameter is a `Template` class instance.
 
 Raw SQL strings are not exposed in the HTML Templates for security reasons, and it is always recommended to use full Sql building over any raw queries while using Templates.
 
+#### Raw SQL
+Generally not recommended, but you can use this to write and execute pure SQL statements by writing them into the function:
+
+```hx
+var query = connection.query('SELECT * FROM table;');
+```
+
+This returns a `Query` instance, which can be subsequently executed.
+
+```hx
+connection.execute(query);
+```
+
+#### Parameterized SQL
+This is the recommended approach to writing SQL without touching the ORM system. This allows you to build SQL statements in a type-safe way.
+
+Take the following example:
+
+```hx
+var searchQuery = new Sql();
+searchQuery
+  .select("*")
+  .from(NewsPost.getTableName())
+  .where(() -> {
+    return this.
+      equals("title", request.params["title"])
+  }, () -> {
+    return this;
+  })
+  .orderBy({ datePosted: 'ASC' })
+  .groupBy({ category: '' });
+```
+
+To build the sql query, supply this to `connection.build`, like so:
+
+```hx
+var query = connection.build(searchQuery);
+var result = connection.execute(query); // execute the built query
+```
+
+For the full SQL class API, see below.
+
+#### ORM
+To use the ORM system that comes with Twinspire Web, there are some extra facilities required to set it up.
+
+The system requires implementing `IDBManager`, `IDBObject` and `IDBResult` values. There are extern classes setup for `js` and `python` targets in their respective folders that can assist in this process. Moreover, consider looking at the `DBSystem` class which provides useful utilities generating implementations for these interfaces.
+
+The `DBSystem` class is executed at macro level, which determines implementation based on target language and target database vendor.
+
+You must add an initialisation macro in your HXML file, or let the Twinspire CLI generate this for you if using the CLI.
+
+```hxml
+--macro twinspire.web.db.DBSystem.init()
+```
+
+##### `IDBObject`
+The `IDBObject` interface is implemented in the `abstract class`, `DBObject`, which has an `@:autoBuild` macro meta-data triggered at compilation stage. This means the `insert`, `update` and `delete` functions are auto-generated based on the derived instances of `DBObject`.
+
+Where implementation details differ is on configuration. You can configure code generation through the callback `DBSystem.onDBObject`:
+
+```hx
+DBSystem.onDBObject = (fields:Array<Field>) -> {
+  // get instance fields
+
+  for (f in fields) {
+    switch (f.name) {
+      case "insert":
+        // generate insert function
+      case "update":
+        // generate update function
+      case "delete":
+        // generate delete function
+    }
+  }
+};
+```
+
+If you do not supply this, `DBSystem` will incorporate common SQL patterns regardless of vendor, so this is useful if you want to take advantage of vendor-specific SQL patterns.
+
+##### `IDBManager`
+Implementing `IDBManager` can be quite daunting. Therefore, we provide common usage in target vendors through the `twinspire.web.db.managers` package.
+
+However, if you want to consider implementing a custom class for a specific vendor, you can do so with some considerations. Consider the SQLite implementation (truncated for readability):
+
+```hx
+package twinspire.web.server.db.managers;
+
+import twinspire.web.server.db.IDBManager.SortOptions;
+
+class SqliteManager implements IDBManager {
+
+    public function new() {
+        // Initialization code for SqliteManager
+    }
+    
+    public function search<T>(filters:#if macro Expr #else Dynamic #end, ?sort:SortOptions):Array<T> {
+        // Implementation for searching with filters and sort options
+        return null;
+    }
+    
+    public function searchBy(table:String, filters:#if macro Expr #else Dynamic #end, ?sort:SortOptions):Array<IDBResult> {
+        // Implementation for searching by table with filters and sort options
+        return null;
+    }
+
+    public function join2<T1, T2>(filters:#if macro Expr #else Dynamic #end, ?sort:SortOptions):Array<JoinedResult2<T1, T2>> {
+        // Implementation for joining two tables with filters and sort options
+        return null;
+    }
+
+    public function joinAny(tables:Array<String>, filters:#if macro Expr #else Dynamic #end, ?sort:SortOptions):JoinedResult2<IDBResult, Array<IDBResult>>{
+        // Implementation for joining any number of tables with filters and sort options
+        return null;
+    }
+    
+    public function delete<T>(filters:#if macro Expr #else Dynamic #end):Int {
+        // Implementation for deleting records based on filters
+        return 0;
+    }
+
+    public function deleteBy(table:String, filters:#if macro Expr #else Dynamic #end):Int {
+        // Implementation for deleting records from a specific table based on filters
+        return 0;
+    }
+
+    private static var _instance:SqliteManager;
+    public static var instance(get, never):SqliteManager;
+    private static function get_instance():SqliteManager {
+        if (_instance == null) {
+            _instance = new SqliteManager();
+        }
+        return _instance;
+    }
+
+}
+```
+
+It is arguably more effective to combine the SQL instance with `DBSystem` info, as Haxe's reflection API is difficult to use in these circumstances. Therefore, best practices:
+
+```hx
+DBSystem.getFieldsInfo("ClassName");
+```
+
+The runtime function `getFieldsInfo` gets you all the fields of the derived instance and allows access to field names, types and meta data.
+
+```hx
+DBSystem.getClassInfo("ClassName");
+```
+
+This runtime function simply gets the meta data of the class, useful for table names, identifying unique identifiers, foreign keys and other constraints.
+
+Some functions in the interface allow filters to be written in the form of macro expressions (`haxe.macro.Expr`). To extract field access and convert to SQL filter values, use either of the following helper (macro) functions:
+
+```hx
+DBSystem.convertExprToSql(macro result, expr); // to convert to `Sql` instance
+DBSystem.convertExprToString(macro result, expr); // to convert to `String`
+```
+
+Example:
+
+```hx
+var filterString = "";
+
+#if macro
+DBSystem.convertExprToString(macro fieldString, expr);
+#end
+```
+
+`filterString` gets a string filter equivalent at compile-time. Moreover, `convertExpr` will expand to generate runtime Sql instance filtering of the underlying `haxe.macro.Expr` for correct parameterisation of the resulting string.
+
+## REST Services
+You can develop public REST services which are macro generated services supplying a public API to interact with your application. This is best combined with correct Authentication and Authorisation systems found under `twinspire.web.security`.
+
+To setup REST services, use the RBAC system to perform:
+
+ * Setup of relevant REST API routes, exposing functions to the public API
+ * Setup of authorisation database tables and their respective users, permissions and 
